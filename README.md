@@ -4,7 +4,8 @@
 ![PrusaSlicer](https://img.shields.io/badge/PrusaSlicer-2.9.4%2B-blue)
 ![Platform](https://img.shields.io/badge/Platform-Windows-green)
 
-**Created by: Brian & Claude Sonnet 4.6 (Anthropic AI)**
+![Flashforge AD5M in PrusaSlicer](PrusaSlicer-AD5M.PNG)
+**Created by: Brian S & Claude Sonnet 4.6 (Anthropic AI)**
 *Tested and verified on real Flashforge Adventurer 5M hardware.*
 *Released to the community freely — use, share, and improve!*
 
@@ -219,6 +220,6 @@ WiFi upload protocol based on Flashforge network communication and community doc
 
 | Version | Changes |
 |---------|---------|
-| v2.1 | Fixed Windows path backslashes, removed personal credentials, official Flashforge bed model, compressed bed texture, CC BY-NC 4.0 license added |
+| v2.1 | Fixed Windows path backslashes, removed personal credentials, official Flashforge bed model, compressed bed texture, CC BY-NC 4.0 license, PrusaSlicer screenshot added |
 | v2.0 | Corrected bed origin (centered), fixed thumbnails (140x110), corrected purge line, fixed host_type for PrusaSlicer 2.9.4, corrected Silk PLA temperatures, added rename dialog to WiFi upload script |
 | v1.0 | Initial release |
