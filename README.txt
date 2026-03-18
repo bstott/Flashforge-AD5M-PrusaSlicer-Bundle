@@ -1,8 +1,8 @@
 ================================================================================
  Flashforge Adventurer 5M - Complete PrusaSlicer Profile Bundle
- Version 2.1 - Community Release
+ Version 2.2 - Community Release
 ================================================================================
- Created by: Brian & Claude (Anthropic AI)
+ Created by: Brian & Claude Sonnet 4.6 (Anthropic AI)
  Released to the community freely - use, share, and improve!
 ================================================================================
 
@@ -19,7 +19,7 @@ compatibility have been corrected.
 WHAT'S INCLUDED?
 ----------------
   1. Flashforge_Adventurer_5M_PrusaSlicer_v2.1.ini  - Complete config bundle
-  2. send_to_ad5m.py                               - WiFi upload Python script
+  2. send_to_ad5m.py                               - WiFi upload Python script v7.0
   3. AD5M_Bed_Texture_Official.png                 - Custom bed texture
   4. AD5M_Printer_Model.stl                        - Official Flashforge bed model
   5. README.txt                                    - This file
@@ -27,10 +27,10 @@ WHAT'S INCLUDED?
 WHAT'S IN THE CONFIG BUNDLE?
 -----------------------------
   Printer Profile:
-    - Bed Shape: 220x220mm, origin 0,0 bottom-left
+    - Bed Shape: 220x220mm, centred origin (-110 to +110 both axes)
     - Bed Type: Stock Textured PEI Build Plate
     - Thumbnails: 140x110 PNG (displays correctly on touchscreen)
-    - Purge line: centered front of bed X=60 to X=160
+    - Purge line: centred front of bed, centred coordinates
     - G-code flavor: Marlin compatible
     - All machine limits configured for AD5M hardware
     - WiFi upload post-processing baked in to all print profiles
@@ -120,11 +120,19 @@ STEP 6 - Test a full slice and upload
   - Click Export G-code
   - PrusaSlicer opens a SAVE dialog — save your .gcode file to your computer
     with whatever name you choose. This is your local copy.
-  - After saving — our upload dialog opens automatically showing a suggested
-    printer filename. Type a meaningful name for the printer touchscreen
-    (example: MyPart_PLA) or accept the suggested name as-is.
+  - After saving — the upload dialog opens automatically with three options:
+
+      [ Upload ]  [ Upload + Print ]  [ Cancel ]
+
+    Upload         — transfers the file to printer storage only.
+                     Start the print manually from the touchscreen.
+    Upload + Print — transfers the file then immediately starts printing.
+                     No touchscreen interaction needed.
+    Cancel         — aborts without sending anything.
+
+  - Type a meaningful name for the printer touchscreen (example: MyPart_PLA)
+    or accept the suggested name as-is.
     Note: .gcode extension is added automatically — no need to type it.
-  - Click Upload to Printer or Cancel to skip the upload
   - A console window will show upload progress:
     [1/6] Connecting...
     [2/6] Requesting control...
@@ -135,21 +143,29 @@ STEP 6 - Test a full slice and upload
     SUCCESS! YourFileName.gcode is ready on the printer.
   - Find your file on the printer touchscreen - ready to print!
 
+  IMPORTANT - Upload + Print:
+    The printer must be IDLE to use Upload + Print.
+    If a print is already running, the script will report a connection error.
+    This is expected firmware behaviour — the AD5M refuses new TCP connections
+    during an active print.
+
 HOW THE WIFI UPLOAD WORKS
 --------------------------
 The script communicates with the AD5M over TCP port 8899 using the
 Flashforge proprietary protocol:
 
-  1. Connects to printer IP on port 8899
-  2. Requests printer control (M601)
-  3. Authenticates with serial and check code (M602)
-  4. Initiates file transfer (M28)
-  5. Streams G-code data in 4KB chunks
-  6. Finalises transfer (M29)
-  7. Releases printer control (M602)
+  Upload:
+    1. Connects to printer IP on port 8899
+    2. Requests printer control (~M601)
+    3. Authenticates with serial and check code (~M602)
+    4. Initiates file transfer (~M28)
+    5. Streams G-code data in 4KB chunks
+    6. Finalises transfer (~M29)
+    7. Releases printer control (~M602)
 
-The rename dialog allows you to give each print a meaningful name
-that appears on the AD5M touchscreen for easy identification.
+  Upload + Print (additional steps after upload):
+    8. Selects the uploaded file (~M23)
+    9. Starts the print (~M24)
 
 KNOWN ISSUES AND NOTES
 -----------------------
@@ -173,8 +189,13 @@ TROUBLESHOOTING
       Open Command Prompt and type: ping 192.168.1.xxx
       (replace with your printer's IP address)
     - Verify IP address in script matches printer network settings
-    - Check printer is not currently printing
+    - Check printer is not currently printing (required for Upload + Print)
     - Verify port 8899 is accessible on your network
+
+  Script crashes with "getaddrinfo failed":
+    - The PRINTER_IP in send_to_ad5m.py is blank or set to a hostname.
+    - Open the script in Notepad and verify PRINTER_IP is a valid IP address
+      (example: "192.168.1.245") not a hostname or placeholder.
 
   Wrong serial/check code error:
     - Double check serial and check code on printer touchscreen
@@ -204,11 +225,30 @@ CREDITS
 
 ================================================================================
  Version History:
+   v2.2 - March 2026
+          send_to_ad5m.py updated to v7.0
+          Added Upload + Print button — slices and starts print in one click
+          Upload + Print uses ~M23 (select) + ~M24 (start) after upload
+          Dialog now highlights filename only, not the .gcode extension
+          Double-extension bug fixed (.gcode not appended if already present)
+          README updated with Upload + Print instructions and troubleshooting
+          New troubleshooting entry: getaddrinfo failed / blank IP address
+
+   v2.1 - February 2026
+          Fixed Windows path backslashes throughout README and script
+          Removed all personal credentials - replaced with YOUR_NAME placeholders
+          Silk PLA temperatures corrected (reduced from 235/230 to 220/215)
+
+   v2.0 - February 2026
+          Corrected bed origin to centred coordinates (-110 to +110)
+          Fixed "Print File Out of Range" firmware error
+          Fixed thumbnails to 140x110 PNG single size (blank touchscreen fix)
+          Corrected purge line coordinates for centred origin
+          Fixed host_type to octoprint for PrusaSlicer 2.9.4 compatibility
+          Added rename dialog to WiFi upload script
+          Personal credentials removed for community release
+          Official Flashforge bed plate STL included
+          ABS open-frame printing notes revised
+
    v1.0 - Initial release
-   v2.1 - Fixed Windows path backslashes, removed personal credentials
-   v2.0 - Corrected bed origin (0,0 bottom-left), fixed thumbnails (140x110),
-           corrected purge line coordinates, fixed host_type for PrusaSlicer
-           2.9.4, corrected Silk PLA temperatures, added rename dialog to
-           WiFi upload script, personal credentials removed for community
-           release, official Flashforge bed model included, ABS notes revised
 ================================================================================
