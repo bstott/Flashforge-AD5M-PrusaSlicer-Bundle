@@ -25,7 +25,7 @@ All known issues with bed origin, thumbnails, purge line, and G-code compatibili
 | File | Description |
 |------|-------------|
 | `Flashforge_Adventurer_5M_PrusaSlicer_v2.1.ini` | Complete PrusaSlicer config bundle |
-| `send_to_ad5m.py` | WiFi upload Python script with rename dialog |
+| `send_to_ad5m.py` | WiFi upload Python script v7.0 — Upload / Upload+Print / Cancel |
 | `AD5M_Bed_Texture_Official.png` | Custom bed texture with official Flashforge branding |
 | `AD5M_Printer_Model.stl` | Official Flashforge bed plate model |
 | `LICENSE` | CC BY-NC 4.0 License |
@@ -81,7 +81,6 @@ All known issues with bed origin, thumbnails, purge line, and G-code compatibili
 - Copy `send_to_ad5m.py` to:
   `C:\Users\YOUR_NAME\Documents\PrusaSlicer\send_to_ad5m.py`
 - Open in Notepad and edit the PRINTER SETTINGS section:
-
 ```python
 PRINTER_IP     = "192.168.1.xxx"   # Your printer's IP address
 PRINTER_SERIAL = "XXXXXXXXXXXX"    # Your printer's serial number
@@ -113,7 +112,6 @@ CHECK_CODE     = "xxxxxxxx"        # Your printer's check code (8 chars)
   *(look for: 0.10mm DETAIL - AD5M, 0.20mm QUALITY - AD5M, 0.30mm DRAFT - AD5M)*
 - Go to: **Print Settings → Output Options → Post-processing scripts**
 - Add the following line using YOUR paths:
-
 ```
 C:\Users\YOUR_NAME\AppData\Local\Programs\Python\Python3xx\python.exe "C:\Users\YOUR_NAME\Documents\PrusaSlicer\send_to_ad5m.py";
 ```
@@ -128,14 +126,20 @@ C:\Users\YOUR_NAME\AppData\Local\Programs\Python\Python3xx\python.exe "C:\Users\
 - Click **Slice**
 - Click **Export G-code**
 - **PrusaSlicer save dialog** opens — save your local .gcode file to your computer
-- **Upload dialog** opens automatically — type a meaningful name for the printer touchscreen
-  *(example: MyPart_PLA — .gcode extension added automatically)*
-- Click **Upload to Printer** or **Cancel** to skip
-- Console window shows upload progress:
+- **Upload dialog** opens automatically with three options:
 
+| Button | Action |
+|--------|--------|
+| **Upload** | Transfers file to printer storage. Start print manually from touchscreen. |
+| **Upload + Print** | Transfers file then immediately starts printing. No touchscreen needed. |
+| **Cancel** | Aborts without sending anything. |
+
+- Type a meaningful name for the printer touchscreen
+  *(example: MyPart_PLA — .gcode extension added automatically)*
+- Console window shows upload progress:
 ```
 ============================================================
-  Flashforge AD5M - WiFi Upload v6.0
+  Flashforge AD5M - WiFi Upload v7.0
 ============================================================
   [1/6] Connecting...
   [2/6] Requesting control...
@@ -143,6 +147,7 @@ C:\Users\YOUR_NAME\AppData\Local\Programs\Python\Python3xx\python.exe "C:\Users\
   [4/6] Initiating upload...
   [5/6] Uploading... [█████████████████████░░░░░░░] 72% 4521 KB/s
   [6/6] Finalising...
+  [+] Print started!
 
   SUCCESS! YourFileName.gcode is ready on the printer.
 ============================================================
@@ -150,21 +155,27 @@ C:\Users\YOUR_NAME\AppData\Local\Programs\Python\Python3xx\python.exe "C:\Users\
 
 - Find your file on the printer touchscreen — ready to print!
 
+> **Important — Upload + Print:** The printer must be **idle**. If a print is already
+> running the script will report a connection error. This is expected firmware behaviour.
+
 ---
 
 ## How the WiFi Upload Works
 
 The script communicates with the AD5M over TCP port 8899 using the Flashforge proprietary protocol:
 
+**Upload:**
 1. Connects to printer IP on port 8899
-2. Requests printer control (M601)
-3. Authenticates with serial and check code (M602)
-4. Initiates file transfer (M28)
+2. Requests printer control (~M601)
+3. Authenticates with serial and check code (~M602)4. Initiates file transfer (~M28)
 5. Streams G-code data in 4KB chunks
-6. Finalises transfer (M29)
-7. Releases printer control (M602)
+6. Finalises transfer (~M29)
+7. Releases printer control (~M602)
 
-The rename dialog lets you give each print a meaningful name that appears on the AD5M touchscreen for easy identification.
+**Upload + Print (additional steps after upload):**
+
+8. Selects the uploaded file (~M23)
+9. Starts the print (~M24)
 
 ---
 
@@ -183,7 +194,12 @@ The rename dialog lets you give each print a meaningful name that appears on the
 - Ping your printer to verify network connectivity:
   `ping 192.168.1.xxx` *(replace with your printer IP)*
 - Verify IP address in script matches printer network settings
-- Check printer is not currently printing
+- Check printer is not currently printing (required for Upload + Print)
+
+**Script crashes with "getaddrinfo failed":**
+- PRINTER_IP in `send_to_ad5m.py` is blank or not a valid IP address
+- Open the script in Notepad and verify PRINTER_IP is set correctly
+  *(example: `"192.168.1.25"` — not a hostname or placeholder)*
 
 **Wrong serial/check code error:**
 - Double check on printer touchscreen → Settings → About
@@ -220,6 +236,12 @@ WiFi upload protocol based on Flashforge network communication and community doc
 
 | Version | Changes |
 |---------|---------|
+| v2.2 | send_to_ad5m.py updated to v7.0 — added Upload+Print button, highlights filename in dialog, double-extension bug fixed. README updated for Upload+Print workflow and new troubleshooting entries. |
 | v2.1 | Fixed Windows path backslashes, removed personal credentials, official Flashforge bed model, compressed bed texture, CC BY-NC 4.0 license, PrusaSlicer screenshot added |
 | v2.0 | Corrected bed origin (centered), fixed thumbnails (140x110), corrected purge line, fixed host_type for PrusaSlicer 2.9.4, corrected Silk PLA temperatures, added rename dialog to WiFi upload script |
 | v1.0 | Initial release |
+```
+
+Commit message to use:
+```
+README.md v2.2 - Upload+Print documentation, updated troubleshooting
