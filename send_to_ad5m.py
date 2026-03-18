@@ -2,15 +2,14 @@
 r"""
 ================================================================================
  Flashforge Adventurer 5M - PrusaSlicer WiFi Upload Script
- Version 6.0 - Rename Dialog Before Upload
+ Version 7.0 - Upload / Upload+Print / Cancel Dialog
 ================================================================================
  Created by: Brian & Claude Sonnet 4.6 (Anthropic AI)
  Tested and verified on real Flashforge Adventurer 5M hardware.
  Released to the community freely - use, share, and improve!
 ================================================================================
  Uploads G-code directly to the AD5M over WiFi via TCP port 8899.
- Pops up a rename dialog before uploading so you can give the file
- a meaningful name on the printer touchscreen.
+ Pops up a dialog to name the file and choose upload or upload+print.
 
  POST-PROCESSING SCRIPT LINE (Print Settings -> Output Options):
    C:\Users\YOUR_NAME\AppData\Local\Programs\Python\Python3xx\python.exe "C:\Users\YOUR_NAME\Documents\PrusaSlicer\send_to_ad5m.py";
@@ -70,13 +69,24 @@ def clean_filename(filepath):
     return name
 
 
+def sanitize_name(name, suggested):
+    name = name.strip() or suggested
+    if name.endswith(".gcode"):
+        name = name[:-6].strip()
+    name = "".join(c for c in name if c.isalnum() or c in "._- ")
+    name = name.strip() + ".gcode"
+    return name
+
+
 def ask_filename(suggested):
     """
-    Pop up a clean dialog showing the suggested filename.
-    User can accept, rename, or cancel to abort upload.
-    Returns chosen filename or None if cancelled.
+    Pop up dialog with three buttons:
+      - Upload to Printer
+      - Upload + Print
+      - Cancel
+    Returns (filename, start_print) or (None, False) if cancelled.
     """
-    result = {"name": None}
+    result = {"name": None, "print": False}
 
     root = tk.Tk()
     root.title("AD5M - Name Your Print")
@@ -84,7 +94,7 @@ def ask_filename(suggested):
     root.attributes("-topmost", True)
 
     # Center on screen
-    width, height = 440, 165
+    width, height = 480, 170
     x = (root.winfo_screenwidth() // 2) - (width // 2)
     y = (root.winfo_screenheight() // 2) - (height // 2)
     root.geometry(f"{width}x{height}+{x}+{y}")
@@ -99,7 +109,7 @@ def ask_filename(suggested):
 
     # Entry pre-filled with suggested name
     entry_var = tk.StringVar(value=suggested)
-    entry = tk.Entry(root, textvariable=entry_var, font=("Segoe UI", 11), width=40)
+    entry = tk.Entry(root, textvariable=entry_var, font=("Segoe UI", 11), width=42)
     entry.pack(padx=20)
     # Select filename only - not the .gcode extension
     name_only = len(suggested) - 6 if suggested.endswith(".gcode") else len(suggested)
@@ -108,18 +118,18 @@ def ask_filename(suggested):
     entry.focus()
 
     def on_upload(event=None):
-        name = entry_var.get().strip() or suggested
-        # Strip extension to clean then re-add
-        if name.endswith(".gcode"):
-            name = name[:-6].strip()
-        # Sanitize for printer filesystem
-        name = "".join(c for c in name if c.isalnum() or c in "._- ")
-        name = name.strip() + ".gcode"
-        result["name"] = name
+        result["name"] = sanitize_name(entry_var.get(), suggested)
+        result["print"] = False
+        root.destroy()
+
+    def on_upload_and_print():
+        result["name"] = sanitize_name(entry_var.get(), suggested)
+        result["print"] = True
         root.destroy()
 
     def on_cancel(event=None):
         result["name"] = None
+        result["print"] = False
         root.destroy()
 
     # Buttons
@@ -128,14 +138,25 @@ def ask_filename(suggested):
 
     tk.Button(
         btn_frame,
-        text="  Upload to Printer  ",
+        text="  Upload  ",
         command=on_upload,
         font=("Segoe UI", 10),
         bg="#0066CC",
         fg="white",
         relief="flat",
         padx=6
-    ).pack(side=tk.LEFT, padx=12)
+    ).pack(side=tk.LEFT, padx=8)
+
+    tk.Button(
+        btn_frame,
+        text="  Upload + Print  ",
+        command=on_upload_and_print,
+        font=("Segoe UI", 10),
+        bg="#006600",
+        fg="white",
+        relief="flat",
+        padx=6
+    ).pack(side=tk.LEFT, padx=8)
 
     tk.Button(
         btn_frame,
@@ -144,23 +165,24 @@ def ask_filename(suggested):
         font=("Segoe UI", 10),
         relief="flat",
         padx=6
-    ).pack(side=tk.LEFT, padx=12)
+    ).pack(side=tk.LEFT, padx=8)
 
     root.bind("<Return>", on_upload)
     root.bind("<Escape>", on_cancel)
     root.protocol("WM_DELETE_WINDOW", on_cancel)
     root.mainloop()
 
-    return result["name"]
+    return result["name"], result["print"]
 
 
-def upload(filepath, filename):
+def upload(filepath, filename, start_print=False):
     filesize = os.path.getsize(filepath)
 
     print(f"\n{'='*60}")
-    print(f"  Flashforge AD5M - WiFi Upload v6.0")
-    print(f"  File : {filename}")
-    print(f"  Size : {filesize:,} bytes")
+    print(f"  Flashforge AD5M - WiFi Upload v7.0")
+    print(f"  File  : {filename}")
+    print(f"  Size  : {filesize:,} bytes")
+    print(f"  Print : {'YES - will start after upload' if start_print else 'No'}")
     print(f"{'='*60}")
 
     try:
@@ -204,10 +226,22 @@ def upload(filepath, filename):
         print("  [6/6] Finalising...")
         time.sleep(0.5)
         send_cmd(sock, "~M29")
+
+        # Start print if requested
+        if start_print:
+            print("  [+] Starting print...")
+            time.sleep(1.0)
+            send_cmd(sock, f"~M23 0:/user/{filename}")
+            time.sleep(0.5)
+            send_cmd(sock, "~M24")
+            print(f"  [+] Print started!")
+
         send_cmd(sock, "~M602")
         sock.close()
 
         print(f"\n  SUCCESS! {filename} is ready on the printer.")
+        if start_print:
+            print(f"  Printing has started!")
         print(f"{'='*60}\n")
         return True
 
@@ -234,15 +268,15 @@ def main():
     # Get suggested clean filename
     suggested = clean_filename(filepath)
 
-    # Show rename dialog - waits for user input
-    filename = ask_filename(suggested)
+    # Show dialog - waits for user input
+    filename, start_print = ask_filename(suggested)
 
     # User cancelled - abort silently
     if filename is None:
         print("Upload cancelled.")
         sys.exit(0)
 
-    success = upload(filepath, filename)
+    success = upload(filepath, filename, start_print)
     sys.exit(0 if success else 1)
 
 
