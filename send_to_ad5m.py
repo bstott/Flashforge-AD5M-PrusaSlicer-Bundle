@@ -1,15 +1,21 @@
 #!/usr/bin/env python3
-r""" 
+r"""
 ================================================================================
  Flashforge Adventurer 5M - PrusaSlicer WiFi Upload Script
- Version 7.0 - Upload / Upload+Print / Cancel Dialog
+ Version 7.1 - Upload Verification + Result Pause
 ================================================================================
- Created by: Brian & Claude Sonnet 4.6 (Anthropic AI)
+ Created by: Brian S & Claude Sonnet 4.6 (Anthropic AI)
  Tested and verified on real Flashforge Adventurer 5M hardware.
  Released to the community freely - use, share, and improve!
 ================================================================================
  Uploads G-code directly to the AD5M over WiFi via TCP port 8899.
  Pops up a dialog to name the file and choose upload or upload+print.
+
+ v7.1 changes:
+   - M661 verification after upload confirms file actually landed on printer
+   - Console window stays open 5 seconds after result so you can read it
+   - Loud FAILED alert if file is not found on printer after upload
+   - Fixed spelling: Finalizing (American English)
 
  POST-PROCESSING SCRIPT LINE (Print Settings -> Output Options):
    C:\Users\YOUR_NAME\AppData\Local\Programs\Python\Python3xx\python.exe "C:\Users\YOUR_NAME\Documents\PrusaSlicer\send_to_ad5m.py";
@@ -31,12 +37,13 @@ import tkinter as tk
 #   CHECK_CODE     : Printer touchscreen -> Settings -> About -> Check Code
 #                    (8 character alphanumeric code)
 # ============================================================
-PRINTER_IP     = "192.168.1.xxx"   # <- Your printer IP address
-PRINTER_SERIAL = "XXXXXXXXXXXX"    # <- Your printer serial number
-CHECK_CODE     = "xxxxxxxx"        # <- Your printer check code (8 chars)
+PRINTER_IP     = "192.168.1.25"    # <- Your printer IP address
+PRINTER_SERIAL = "SNMQKDD9703270"  # <- Your printer serial number
+CHECK_CODE     = "7e3e4f50"        # <- Your printer check code (8 chars)
 CMD_PORT       = 8899              # <- Do not change
 TIMEOUT        = 15                # <- Do not change
 CHUNK_SIZE     = 4096              # <- Do not change
+RESULT_PAUSE   = 5                 # <- Seconds to keep console open after result
 # ============================================================
 
 
@@ -58,6 +65,27 @@ def send_cmd(sock, command):
     return response.decode("utf-8", errors="ignore").strip()
 
 
+def verify_upload(sock, filename):
+    """
+    Send ~M661 and check if filename appears in the response.
+    Returns True if file is confirmed on printer, False otherwise.
+    """
+    print("  [V]   Verifying upload...")
+    time.sleep(0.5)
+    response = send_cmd(sock, "~M661")
+    # M661 returns paths like /data/filename.gcode
+    # Our uploads go to 0:/user/ but printer lists them under /data/
+    # Check for the bare filename anywhere in the response
+    bare_name = filename.lower()
+    response_lower = response.lower()
+    if bare_name in response_lower:
+        return True
+    # Also check without .gcode in case printer strips it
+    if bare_name.replace(".gcode", "") in response_lower:
+        return True
+    return False
+
+
 def clean_filename(filepath):
     name = os.path.basename(filepath)
     if name.startswith("."):
@@ -76,6 +104,14 @@ def sanitize_name(name, suggested):
     name = "".join(c for c in name if c.isalnum() or c in "._- ")
     name = name.strip() + ".gcode"
     return name
+
+
+def pause_before_close(seconds=RESULT_PAUSE):
+    """Keep console open so user can read the result."""
+    for i in range(seconds, 0, -1):
+        print(f"  Closing in {i}s...", end="\r", flush=True)
+        time.sleep(1)
+    print()
 
 
 def ask_filename(suggested):
@@ -179,7 +215,7 @@ def upload(filepath, filename, start_print=False):
     filesize = os.path.getsize(filepath)
 
     print(f"\n{'='*60}")
-    print(f"  Flashforge AD5M - WiFi Upload v7.0")
+    print(f"  Flashforge AD5M - WiFi Upload v7.1")
     print(f"  File  : {filename}")
     print(f"  Size  : {filesize:,} bytes")
     print(f"  Print : {'YES - will start after upload' if start_print else 'No'}")
@@ -202,6 +238,7 @@ def upload(filepath, filename, start_print=False):
         if "error" in resp.lower():
             print(f"  ERROR: Printer rejected upload: {resp}")
             sock.close()
+            pause_before_close()
             return False
 
         print("  [5/6] Uploading...")
@@ -223,9 +260,23 @@ def upload(filepath, filename, start_print=False):
         elapsed = time.time() - start_time
         print(f"\n        {bytes_sent:,} bytes in {elapsed:.1f}s ({bytes_sent/elapsed/1024:.0f} KB/s)")
 
-        print("  [6/6] Finalising...")
+        print("  [6/6] Finalizing...")
         time.sleep(0.5)
         send_cmd(sock, "~M29")
+
+        # Verify the file actually landed on the printer
+        verified = verify_upload(sock, filename)
+
+        if not verified:
+            print(f"\n{'='*60}")
+            print(f"  !! UPLOAD FAILED !!")
+            print(f"  {filename} was NOT found on the printer.")
+            print(f"  The file did not transfer successfully.")
+            print(f"  Check that no other app is connected to the printer.")
+            print(f"{'='*60}\n")
+            sock.close()
+            pause_before_close()
+            return False
 
         # Start print if requested
         if start_print:
@@ -239,18 +290,24 @@ def upload(filepath, filename, start_print=False):
         send_cmd(sock, "~M602")
         sock.close()
 
-        print(f"\n  SUCCESS! {filename} is ready on the printer.")
+        print(f"\n{'='*60}")
+        print(f"  SUCCESS! {filename} is ready on the printer.")
         if start_print:
             print(f"  Printing has started!")
+        print(f"  Upload verified - file confirmed on printer.")
         print(f"{'='*60}\n")
+        pause_before_close()
         return True
 
     except ConnectionRefusedError:
         print(f"\n  ERROR: Connection refused - is printer on WiFi?")
+        pause_before_close()
     except socket.timeout:
         print(f"\n  ERROR: Timed out - check IP {PRINTER_IP}")
+        pause_before_close()
     except Exception as e:
         print(f"\n  ERROR: {type(e).__name__}: {e}")
+        pause_before_close()
     return False
 
 
