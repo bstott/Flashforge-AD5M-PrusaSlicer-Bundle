@@ -25,7 +25,7 @@ All known issues with bed origin, thumbnails, purge line, and G-code compatibili
 | File | Description |
 |------|-------------|
 | `Flashforge_Adventurer_5M_PrusaSlicer_v2.1.ini` | Complete PrusaSlicer config bundle |
-| `send_to_ad5m.py` | WiFi upload Python script v7.0 — Upload / Upload+Print / Cancel |
+| `send_to_ad5m.py` | WiFi upload Python script v7.1 — Upload / Upload+Print / Cancel / Verified |
 | `AD5M_Bed_Texture_Official.png` | Custom bed texture with official Flashforge branding |
 | `AD5M_Printer_Model.stl` | Official Flashforge bed plate model |
 | `LICENSE` | CC BY-NC 4.0 License |
@@ -136,27 +136,29 @@ C:\Users\YOUR_NAME\AppData\Local\Programs\Python\Python3xx\python.exe "C:\Users\
 
 - Type a meaningful name for the printer touchscreen
   *(example: MyPart_PLA — .gcode extension added automatically)*
-- Console window shows upload progress:
+- Console window shows upload progress and verification:
 ```
 ============================================================
-  Flashforge AD5M - WiFi Upload v7.0
+  Flashforge AD5M - WiFi Upload v7.1
 ============================================================
   [1/6] Connecting...
   [2/6] Requesting control...
   [3/6] Authenticating...
   [4/6] Initiating upload...
   [5/6] Uploading... [█████████████████████░░░░░░░] 72% 4521 KB/s
-  [6/6] Finalising...
-  [+] Print started!
+  [6/6] Finalizing...
+  [V]   Verifying upload...
 
   SUCCESS! YourFileName.gcode is ready on the printer.
+  Upload verified - file confirmed on printer.
 ============================================================
+  Closing in 5s...
 ```
 
 - Find your file on the printer touchscreen — ready to print!
 
 > **Important — Upload + Print:** The printer must be **idle**. If a print is already
-> running the script will report a connection error. This is expected firmware behaviour.
+> running the script will report a connection error. This is expected firmware behavior.
 
 ---
 
@@ -167,15 +169,17 @@ The script communicates with the AD5M over TCP port 8899 using the Flashforge pr
 **Upload:**
 1. Connects to printer IP on port 8899
 2. Requests printer control (~M601)
-3. Authenticates with serial and check code (~M602)4. Initiates file transfer (~M28)
+3. Authenticates with serial and check code (~M602)
+4. Initiates file transfer (~M28)
 5. Streams G-code data in 4KB chunks
-6. Finalises transfer (~M29)
-7. Releases printer control (~M602)
+6. Finalizes transfer (~M29)
+7. Verifies file on printer (~M661)
+8. Releases printer control (~M602)
 
 **Upload + Print (additional steps after upload):**
 
-8. Selects the uploaded file (~M23)
-9. Starts the print (~M24)
+9. Selects the uploaded file (~M23)
+10. Starts the print (~M24)
 
 ---
 
@@ -195,6 +199,12 @@ The script communicates with the AD5M over TCP port 8899 using the Flashforge pr
   `ping 192.168.1.xxx` *(replace with your printer IP)*
 - Verify IP address in script matches printer network settings
 - Check printer is not currently printing (required for Upload + Print)
+- Check no other app is connected to the printer on port 8899
+
+**Upload reports SUCCESS but verification fails:**
+- Another app is connected to the printer and holding the TCP session
+- Close any other printer control apps before uploading
+- Only one TCP connection to port 8899 is allowed at a time
 
 **Script crashes with "getaddrinfo failed":**
 - PRINTER_IP in `send_to_ad5m.py` is blank or not a valid IP address
@@ -236,12 +246,8 @@ WiFi upload protocol based on Flashforge network communication and community doc
 
 | Version | Changes |
 |---------|---------|
+| v2.3 | send_to_ad5m.py updated to v7.1 — M661 upload verification confirms file landed on printer, loud FAILED alert if verification fails, 5 second result pause so you can read the outcome, American English spelling throughout. New troubleshooting entry: verification failure / other app holding TCP session. |
 | v2.2 | send_to_ad5m.py updated to v7.0 — added Upload+Print button, highlights filename in dialog, double-extension bug fixed. README updated for Upload+Print workflow and new troubleshooting entries. |
 | v2.1 | Fixed Windows path backslashes, removed personal credentials, official Flashforge bed model, compressed bed texture, CC BY-NC 4.0 license, PrusaSlicer screenshot added |
 | v2.0 | Corrected bed origin (centered), fixed thumbnails (140x110), corrected purge line, fixed host_type for PrusaSlicer 2.9.4, corrected Silk PLA temperatures, added rename dialog to WiFi upload script |
 | v1.0 | Initial release |
-```
-
-Commit message to use:
-```
-README.md v2.2 - Upload+Print documentation, updated troubleshooting
