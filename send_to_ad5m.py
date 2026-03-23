@@ -2,7 +2,7 @@
 r"""
 ================================================================================
  Flashforge Adventurer 5M - PrusaSlicer WiFi Upload Script
- Version 7.1 - Upload Verification + Result Pause
+ Version 7.2 - Real Filename from SLIC3R_PP_OUTPUT_NAME
 ================================================================================
  Created by: Brian S & Claude Sonnet 4.6 (Anthropic AI)
  Tested and verified on real Flashforge Adventurer 5M hardware.
@@ -10,6 +10,12 @@ r"""
 ================================================================================
  Uploads G-code directly to the AD5M over WiFi via TCP port 8899.
  Pops up a dialog to name the file and choose upload or upload+print.
+
+ v7.2 changes:
+   - Uses SLIC3R_PP_OUTPUT_NAME environment variable to get the real filename
+     the user chose when saving — no more dot-prefix workaround needed
+   - Dialog pre-fills with the actual save name (e.g. MyPart_PLA.gcode)
+   - clean_filename() kept as fallback if environment variable is not set
 
  v7.1 changes:
    - M661 verification after upload confirms file actually landed on printer
@@ -215,7 +221,7 @@ def upload(filepath, filename, start_print=False):
     filesize = os.path.getsize(filepath)
 
     print(f"\n{'='*60}")
-    print(f"  Flashforge AD5M - WiFi Upload v7.1")
+    print(f"  Flashforge AD5M - WiFi Upload v7.2")
     print(f"  File  : {filename}")
     print(f"  Size  : {filesize:,} bytes")
     print(f"  Print : {'YES - will start after upload' if start_print else 'No'}")
@@ -322,8 +328,18 @@ def main():
         print(f"ERROR: File not found: {filepath}")
         sys.exit(1)
 
-    # Get suggested clean filename
-    suggested = clean_filename(filepath)
+    # Get suggested filename — use PrusaSlicer's output name if available
+    # SLIC3R_PP_OUTPUT_NAME contains the real filename the user chose when saving
+    output_name = os.environ.get("SLIC3R_PP_OUTPUT_NAME", "").strip()
+    if output_name:
+        suggested = os.path.basename(output_name)
+        if not suggested.endswith(".gcode"):
+            suggested += ".gcode"
+        print(f"  Filename from PrusaSlicer: {suggested}")
+    else:
+        # Fallback: strip dot prefix and .pp extension from temp file path
+        suggested = clean_filename(filepath)
+        print(f"  Filename from temp file: {suggested}")
 
     # Show dialog - waits for user input
     filename, start_print = ask_filename(suggested)
