@@ -25,7 +25,7 @@ All known issues with bed origin, thumbnails, purge line, and G-code compatibili
 | File | Description |
 |------|-------------|
 | `Flashforge_Adventurer_5M_PrusaSlicer_v2.1.ini` | Complete PrusaSlicer config bundle |
-| `send_to_ad5m.py` | WiFi upload Python script v7.1 — Upload / Upload+Print / Cancel / Verified |
+| `send_to_ad5m.py` | WiFi upload Python script v7.2 — Upload / Upload+Print / Cancel / Verified |
 | `AD5M_Bed_Texture_Official.png` | Custom bed texture with official Flashforge branding |
 | `AD5M_Printer_Model.stl` | Official Flashforge bed plate model |
 | `LICENSE` | CC BY-NC 4.0 License |
@@ -134,13 +134,15 @@ C:\Users\YOUR_NAME\AppData\Local\Programs\Python\Python3xx\python.exe "C:\Users\
 | **Upload + Print** | Transfers file then immediately starts printing. No touchscreen needed. |
 | **Cancel** | Aborts without sending anything. |
 
-- Type a meaningful name for the printer touchscreen
-  *(example: MyPart_PLA — .gcode extension added automatically)*
+- The dialog pre-fills with your actual save filename automatically
+  *(no more cryptic temp names — what you saved is what you see)*
+- Edit the name if desired or accept as-is. .gcode extension added automatically.
 - Console window shows upload progress and verification:
 ```
 ============================================================
-  Flashforge AD5M - WiFi Upload v7.1
+  Flashforge AD5M - WiFi Upload v7.2
 ============================================================
+  Filename from PrusaSlicer: MyPart_PLA.gcode
   [1/6] Connecting...
   [2/6] Requesting control...
   [3/6] Authenticating...
@@ -149,7 +151,7 @@ C:\Users\YOUR_NAME\AppData\Local\Programs\Python\Python3xx\python.exe "C:\Users\
   [6/6] Finalizing...
   [V]   Verifying upload...
 
-  SUCCESS! YourFileName.gcode is ready on the printer.
+  SUCCESS! MyPart_PLA.gcode is ready on the printer.
   Upload verified - file confirmed on printer.
 ============================================================
   Closing in 5s...
@@ -246,6 +248,7 @@ WiFi upload protocol based on Flashforge network communication and community doc
 
 | Version | Changes |
 |---------|---------|
+| v2.4 | send_to_ad5m.py updated to v7.2 — uses SLIC3R_PP_OUTPUT_NAME environment variable to get the real filename from PrusaSlicer. Dialog pre-fills with the actual save name. No more dot-prefix workaround. Workflow is now: Slice → Save → Upload → Print. |
 | v2.3 | send_to_ad5m.py updated to v7.1 — M661 upload verification confirms file landed on printer, loud FAILED alert if verification fails, 5 second result pause so you can read the outcome, American English spelling throughout. New troubleshooting entry: verification failure / other app holding TCP session. |
 | v2.2 | send_to_ad5m.py updated to v7.0 — added Upload+Print button, highlights filename in dialog, double-extension bug fixed. README updated for Upload+Print workflow and new troubleshooting entries. |
 | v2.1 | Fixed Windows path backslashes, removed personal credentials, official Flashforge bed model, compressed bed texture, CC BY-NC 4.0 license, PrusaSlicer screenshot added |
