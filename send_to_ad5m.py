@@ -2,7 +2,7 @@
 r"""
 ================================================================================
  Flashforge Adventurer 5M - PrusaSlicer WiFi Upload Script
- Version 7.2 - Real Filename from SLIC3R_PP_OUTPUT_NAME
+ Version 7.4 - Config file support added
 ================================================================================
  Created by: Brian S & Claude Sonnet 4.6 (Anthropic AI)
  Tested and verified on real Flashforge Adventurer 5M hardware.
@@ -10,6 +10,16 @@ r"""
 ================================================================================
  Uploads G-code directly to the AD5M over WiFi via TCP port 8899.
  Pops up a dialog to name the file and choose upload or upload+print.
+
+ v7.4 changes:
+   - Reads printer IP from send_to_ad5m.cfg if present in same directory
+   - Falls back to hardcoded PRINTER_IP if config file not found
+   - Existing setups unchanged - config file is optional not required
+   - Linux binary users: edit send_to_ad5m.cfg instead of recompiling
+
+ v7.3 changes:
+   - sanitize_name() always strips then re-adds exactly one .gcode extension
+     to prevent both name.gcode.gcode and name-with-no-extension issues.
 
  v7.2 changes:
    - Uses SLIC3R_PP_OUTPUT_NAME environment variable to get the real filename
@@ -24,7 +34,8 @@ r"""
    - Fixed spelling: Finalizing (American English)
 
  POST-PROCESSING SCRIPT LINE (Print Settings -> Output Options):
-   C:\Users\YOUR_NAME\AppData\Local\Programs\Python\Python3xx\python.exe "C:\Users\YOUR_NAME\Documents\PrusaSlicer\send_to_ad5m.py";
+   Windows: C:\Users\YOUR_NAME\AppData\Local\Programs\Python\Python3xx\python.exe "C:\Users\YOUR_NAME\Documents\PrusaSlicer\send_to_ad5m.py";
+   Linux:   /home/YOUR_USERNAME/Documents/PrusaSlicer/send_to_ad5m
 ================================================================================
 """
 
@@ -33,24 +44,55 @@ import os
 import sys
 import time
 import tkinter as tk
+import configparser
 
 # ============================================================
 # PRINTER SETTINGS - UPDATE THESE FOR YOUR PRINTER
+# Or use send_to_ad5m.cfg in the same directory (recommended for Linux)
 # ============================================================
-# How to find your printer settings:
-#   PRINTER_IP     : Printer touchscreen -> Settings -> Network -> IP Address
-#   PRINTER_SERIAL : Printer touchscreen -> Settings -> About -> Serial Number
-#   CHECK_CODE     : Printer touchscreen -> Settings -> About -> Check Code
-#                    (8 character alphanumeric code)
+PRINTER_IP     = "192.168.XXX.XXX"
+PRINTER_SERIAL = "XXXXXXXXXXXXX"
+CHECK_CODE     = "XXXXXXXX"
+CMD_PORT       = 8899
+TIMEOUT        = 15
+CHUNK_SIZE     = 4096
+RESULT_PAUSE   = 5
 # ============================================================
-PRINTER_IP     = "192.168.1.25"    # <- Your printer IP address
-PRINTER_SERIAL = "SNMQKDD9703270"  # <- Your printer serial number
-CHECK_CODE     = "7e3e4f50"        # <- Your printer check code (8 chars)
-CMD_PORT       = 8899              # <- Do not change
-TIMEOUT        = 15                # <- Do not change
-CHUNK_SIZE     = 4096              # <- Do not change
-RESULT_PAUSE   = 5                 # <- Seconds to keep console open after result
-# ============================================================
+
+
+def load_config():
+    """
+    Load printer settings from send_to_ad5m.cfg if it exists.
+    Config file overrides hardcoded values above.
+    Falls back to hardcoded values if config file not found.
+    """
+    global PRINTER_IP, PRINTER_SERIAL, CHECK_CODE
+
+    # Find config file next to script or binary
+    if getattr(sys, 'frozen', False):
+        base_dir = os.path.dirname(sys.executable)
+    else:
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+
+    config_path = os.path.join(base_dir, 'send_to_ad5m.cfg')
+
+    if not os.path.exists(config_path):
+        return  # No config file - use hardcoded values
+
+    config = configparser.ConfigParser()
+    config.read(config_path)
+
+    if 'printer' in config:
+        p = config['printer']
+        ip = p.get('ip', '').strip()
+        serial = p.get('serial', '').strip()
+        code = p.get('check_code', '').strip()
+        if ip:
+            PRINTER_IP = ip
+        if serial:
+            PRINTER_SERIAL = serial
+        if code:
+            CHECK_CODE = code
 
 
 def send_cmd(sock, command):
@@ -72,21 +114,13 @@ def send_cmd(sock, command):
 
 
 def verify_upload(sock, filename):
-    """
-    Send ~M661 and check if filename appears in the response.
-    Returns True if file is confirmed on printer, False otherwise.
-    """
     print("  [V]   Verifying upload...")
     time.sleep(0.5)
     response = send_cmd(sock, "~M661")
-    # M661 returns paths like /data/filename.gcode
-    # Our uploads go to 0:/user/ but printer lists them under /data/
-    # Check for the bare filename anywhere in the response
     bare_name = filename.lower()
     response_lower = response.lower()
     if bare_name in response_lower:
         return True
-    # Also check without .gcode in case printer strips it
     if bare_name.replace(".gcode", "") in response_lower:
         return True
     return False
@@ -113,7 +147,6 @@ def sanitize_name(name, suggested):
 
 
 def pause_before_close(seconds=RESULT_PAUSE):
-    """Keep console open so user can read the result."""
     for i in range(seconds, 0, -1):
         print(f"  Closing in {i}s...", end="\r", flush=True)
         time.sleep(1)
@@ -121,13 +154,6 @@ def pause_before_close(seconds=RESULT_PAUSE):
 
 
 def ask_filename(suggested):
-    """
-    Pop up dialog with three buttons:
-      - Upload to Printer
-      - Upload + Print
-      - Cancel
-    Returns (filename, start_print) or (None, False) if cancelled.
-    """
     result = {"name": None, "print": False}
 
     root = tk.Tk()
@@ -135,13 +161,11 @@ def ask_filename(suggested):
     root.resizable(False, False)
     root.attributes("-topmost", True)
 
-    # Center on screen
     width, height = 480, 170
     x = (root.winfo_screenwidth() // 2) - (width // 2)
     y = (root.winfo_screenheight() // 2) - (height // 2)
     root.geometry(f"{width}x{height}+{x}+{y}")
 
-    # Label
     tk.Label(
         root,
         text="Name this print on the AD5M touchscreen:",
@@ -149,11 +173,9 @@ def ask_filename(suggested):
         pady=10
     ).pack()
 
-    # Entry pre-filled with suggested name
     entry_var = tk.StringVar(value=suggested)
     entry = tk.Entry(root, textvariable=entry_var, font=("Segoe UI", 11), width=42)
     entry.pack(padx=20)
-    # Select filename only - not the .gcode extension
     name_only = len(suggested) - 6 if suggested.endswith(".gcode") else len(suggested)
     entry.select_range(0, name_only)
     entry.icursor(name_only)
@@ -174,39 +196,19 @@ def ask_filename(suggested):
         result["print"] = False
         root.destroy()
 
-    # Buttons
     btn_frame = tk.Frame(root)
     btn_frame.pack(pady=12)
 
-    tk.Button(
-        btn_frame,
-        text="  Upload  ",
-        command=on_upload,
-        font=("Segoe UI", 10),
-        bg="#0066CC",
-        fg="white",
-        relief="flat",
-        padx=6
+    tk.Button(btn_frame, text="  Upload  ", command=on_upload,
+              font=("Segoe UI", 10), bg="#0066CC", fg="white", relief="flat", padx=6
     ).pack(side=tk.LEFT, padx=8)
 
-    tk.Button(
-        btn_frame,
-        text="  Upload + Print  ",
-        command=on_upload_and_print,
-        font=("Segoe UI", 10),
-        bg="#006600",
-        fg="white",
-        relief="flat",
-        padx=6
+    tk.Button(btn_frame, text="  Upload + Print  ", command=on_upload_and_print,
+              font=("Segoe UI", 10), bg="#006600", fg="white", relief="flat", padx=6
     ).pack(side=tk.LEFT, padx=8)
 
-    tk.Button(
-        btn_frame,
-        text="  Cancel  ",
-        command=on_cancel,
-        font=("Segoe UI", 10),
-        relief="flat",
-        padx=6
+    tk.Button(btn_frame, text="  Cancel  ", command=on_cancel,
+              font=("Segoe UI", 10), relief="flat", padx=6
     ).pack(side=tk.LEFT, padx=8)
 
     root.bind("<Return>", on_upload)
@@ -221,7 +223,7 @@ def upload(filepath, filename, start_print=False):
     filesize = os.path.getsize(filepath)
 
     print(f"\n{'='*60}")
-    print(f"  Flashforge AD5M - WiFi Upload v7.2")
+    print(f"  Flashforge AD5M - WiFi Upload v7.4")
     print(f"  File  : {filename}")
     print(f"  Size  : {filesize:,} bytes")
     print(f"  Print : {'YES - will start after upload' if start_print else 'No'}")
@@ -270,7 +272,6 @@ def upload(filepath, filename, start_print=False):
         time.sleep(0.5)
         send_cmd(sock, "~M29")
 
-        # Verify the file actually landed on the printer
         verified = verify_upload(sock, filename)
 
         if not verified:
@@ -284,7 +285,6 @@ def upload(filepath, filename, start_print=False):
             pause_before_close()
             return False
 
-        # Start print if requested
         if start_print:
             print("  [+] Starting print...")
             time.sleep(1.0)
@@ -318,7 +318,8 @@ def upload(filepath, filename, start_print=False):
 
 
 def main():
-    # Called with no args - PrusaSlicer validating script on save
+    load_config()
+
     if len(sys.argv) < 2:
         sys.exit(0)
 
@@ -328,8 +329,6 @@ def main():
         print(f"ERROR: File not found: {filepath}")
         sys.exit(1)
 
-    # Get suggested filename — use PrusaSlicer's output name if available
-    # SLIC3R_PP_OUTPUT_NAME contains the real filename the user chose when saving
     output_name = os.environ.get("SLIC3R_PP_OUTPUT_NAME", "").strip()
     if output_name:
         suggested = os.path.basename(output_name)
@@ -337,14 +336,11 @@ def main():
             suggested += ".gcode"
         print(f"  Filename from PrusaSlicer: {suggested}")
     else:
-        # Fallback: strip dot prefix and .pp extension from temp file path
         suggested = clean_filename(filepath)
         print(f"  Filename from temp file: {suggested}")
 
-    # Show dialog - waits for user input
     filename, start_print = ask_filename(suggested)
 
-    # User cancelled - abort silently
     if filename is None:
         print("Upload cancelled.")
         sys.exit(0)
