@@ -1,4 +1,5 @@
 # Flashforge Adventurer 5M - Complete PrusaSlicer Bundle
+tested on Flashforge Firmware from 2.7.X.X to 5.1.8-2.2.3
 
 ![License: CC BY-NC 4.0](https://img.shields.io/badge/License-CC%20BY--NC%204.0-lightgrey.svg)
 ![PrusaSlicer](https://img.shields.io/badge/PrusaSlicer-2.9.4%2B-blue)
